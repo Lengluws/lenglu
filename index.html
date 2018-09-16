@@ -175,35 +175,10 @@
     
     <div class="article-entry" itemprop="articleBody">
       
-        <h6 id="使用express框架时服务器端重定向后获取不到referer-referrer"><a href="#使用express框架时服务器端重定向后获取不到referer-referrer" class="headerlink" title="使用express框架时服务器端重定向后获取不到referer(referrer)"></a>使用express框架时服务器端重定向后获取不到referer(referrer)</h6><p>如果使用过这个参数，我们会发现有时候是referer，而有时候是referrer。究竟是怎么回事呢？<br>这里的referer是一个历史遗留问题,http中里面有用来表示页面或者资源请求头，是在上世纪九十年代提出来的，但是当时将这个命名为referer，并写入http协议的里面，正确的写法实际上是referrer。由于在http协议中标准错误了，错误大家就讲错就错，浏览器和服务端使用这个错误的referer，但是意思都是一个样的。<br>但是在JavaScript中呢，大家就比较统一，统一使用referrer，我们可以使用document.referrer来获取referrer来找到源地址。<br>在测试重定向时，先用NodeJs在后端进行referer获取：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">router.get(&apos;/test&apos;, function(req, res, next) &#123;</span><br><span class="line">	var Url = req.originalUrl;</span><br><span class="line">    var refe = req.headers[referer];</span><br><span class="line">&#125;)</span><br></pre></td></tr></table></figure></p>
-<p>req.originalUrl获取的是当前的url地址,没有问题。但是req.headers[referer]却没有结果，console.log出现的是undefined，将referer改为了referrer也是同样的结果。<br>点开express查看源码(/express/lib/request.js):<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line">req.get = </span><br><span class="line">req.header = function header(name) &#123;</span><br><span class="line">	if (!name) &#123;</span><br><span class="line">    	throw new TypeError(&apos;name argument is required to req.get&apos;);</span><br><span class="line">    &#125;</span><br><span class="line">    if (typeof name !== &apos;string&apos;) &#123;</span><br><span class="line">    	throw new TypeError(&apos;name must be a string to req.get&apos;);</span><br><span class="line">    &#125;</span><br><span class="line">    var lc = name.toLowerCase();</span><br><span class="line">    switch (lc) &#123;</span><br><span class="line">    	case &apos;referer&apos;:</span><br><span class="line">        case: &apos;referrer&apos;:</span><br><span class="line">        	return this.headers.referrer</span><br><span class="line">            	|| this.headers.referer;</span><br><span class="line">        default:</span><br><span class="line">        	return this.headers[lc];</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
-<p>显示其中有这个方法，而且能同时识别referer和referrer，但我们确是得到了undefined，那么我们就输出headers：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">router.get(&apos;/test&apos;, function(req, res, next)&#123;</span><br><span class="line">	var Url = req.originalUrl;</span><br><span class="line">    var refe = req.headers;</span><br><span class="line">    res.writeHeade(200, &#123;</span><br><span class="line">    	&quot;Content-Type&quot;: &quot;text/html;charset=utf-8&quot;</span><br><span class="line">    &#125;);</span><br><span class="line">    res.end(JSON.stringify(refe));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
-<p>出现的结果是：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&#123;&quot;host&quot;:&quot;localhost:3000&quot;,&quot;connection&quot;:&quot;keep-alive&quot;,&quot;upgrade-insecure-requests&quot;:&quot;1&quot;,&quot;user-agent&quot;:&quot;Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.103 Safari/537.36&quot;,&quot;accept&quot;:&quot;text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8&quot;,&quot;accept-encoding&quot;:&quot;gzip, deflate, sdch&quot;,&quot;accept-language&quot;:&quot;zh-CN,zh;q=0.8&quot;&#125;</span><br></pre></td></tr></table></figure></p>
-<p>原因是重定向时没有这个参数。<br>再查查看，会发现。这个referer的支持是不统一的，referer这个参数是浏览器自动添加到header中的，并且通过浏览器自动传递下去，不管是几重定向，找到都是最终的源地址。<br>重新部署一个服务器，写两个网页，用a来进行重定向,我们得到的结果是：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&#123;&quot;host&quot;:&quot;localhost:3000&quot;,&quot;connection&quot;:&quot;keep-alive&quot;,&quot;upgrade-insecure-requests&quot;:&quot;1&quot;,&quot;user-agent&quot;:&quot;Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.103 Safari/537.36&quot;,&quot;accept&quot;:&quot;text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8&quot;,&quot;referer&quot;:&quot;http://localhost/test/1.html&quot;,&quot;accept-encoding&quot;:&quot;gzip, deflate, sdch&quot;,&quot;accept-language&quot;:&quot;zh-CN,zh;q=0.8&quot;&#125;</span><br></pre></td></tr></table></figure></p>
-<p>现在便有了referer属性。</p>
-<table>
-<thead>
-<tr>
-<th>能获取到referer</th>
-<th>不能获取到referer</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>使用A标签来访问页面</td>
-<td>使用js重定向 location.href 和 location.replace()</td>
-</tr>
-<tr>
-<td>submit input提交的表单post和get</td>
-<td>服务器端的redirect，PHP中的header(“location:”)</td>
-</tr>
-<tr>
-<td>使用js提交的post和get表单</td>
-<td>使用http重定向（我开始做的就是http重定向的项目，所以得不到referer参数）</td>
-</tr>
-</tbody>
-</table>
-
+        <h6 id="使用express框架时服务器端重定向后获取不到referer-referrer"><a href="#使用express框架时服务器端重定向后获取不到referer-referrer" class="headerlink" title="使用express框架时服务器端重定向后获取不到referer(referrer)"></a>使用express框架时服务器端重定向后获取不到referer(referrer)</h6><p>如果使用过这个参数，我们会发现有时候是referer，而有时候是referrer。究竟是怎么回事呢？<br>这里的referer是一个历史遗留问题,http中里面有用来表示页面或者资源请求头，是在上世纪九十年代提出来的，但是当时将这个命名为referer，并写入http协议的里面，正确的写法实际上是referrer。由于在http协议中标准错误了，错误大家就讲错就错，浏览器和服务端使用这个错误的referer，但是意思都是一个样的。<br>
+        
+          <a class="article-more-a" href="/2018/09/16/服务器端URL从定向后获取referer-referer/#more">more >></a>
+        
       
 
       
@@ -285,50 +260,9 @@
 <h6 id="列出文件和目录"><a href="#列出文件和目录" class="headerlink" title="列出文件和目录"></a>列出文件和目录</h6><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ls</span><br></pre></td></tr></table></figure>
 <figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ll</span><br></pre></td></tr></table></figure>
 <h6 id="新建文件（a）"><a href="#新建文件（a）" class="headerlink" title="新建文件（a）"></a>新建文件（a）</h6><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo touch a</span><br></pre></td></tr></table></figure>
-<h6 id="查看文件（a）"><a href="#查看文件（a）" class="headerlink" title="查看文件（a）"></a>查看文件（a）</h6><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">cat a</span><br></pre></td></tr></table></figure>
-<h6 id="编辑文件（a）"><a href="#编辑文件（a）" class="headerlink" title="编辑文件（a）"></a>编辑文件（a）</h6><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo vim a</span><br></pre></td></tr></table></figure>
-<p>按enter键，然后按I键，当左下角出现 INSERT 时，移动光标到编辑位置进行编辑。<br>编辑完成后，按esc键，退出编辑环境：<br>放弃修改内容并退出：按键输入 :q 然后按enter键；<br>保存修改内容并退出：按键输入 :wq 然后按enter键。</p>
-<h6 id="文件夹重命名（将文件夹a重命名为b）"><a href="#文件夹重命名（将文件夹a重命名为b）" class="headerlink" title="文件夹重命名（将文件夹a重命名为b）"></a>文件夹重命名（将文件夹a重命名为b）</h6><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo mv a b</span><br></pre></td></tr></table></figure>
-<h6 id="移动文件夹（将文件夹a移动到文件夹b，并重名名为c）"><a href="#移动文件夹（将文件夹a移动到文件夹b，并重名名为c）" class="headerlink" title="移动文件夹（将文件夹a移动到文件夹b，并重名名为c）"></a>移动文件夹（将文件夹a移动到文件夹b，并重名名为c）</h6><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo mv /a /b/c</span><br></pre></td></tr></table></figure>
-<h6 id="根据端口查进程pid"><a href="#根据端口查进程pid" class="headerlink" title="根据端口查进程pid"></a>根据端口查进程pid</h6><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo lsof -i:端口号</span><br></pre></td></tr></table></figure>
-<h6 id="杀进程"><a href="#杀进程" class="headerlink" title="杀进程"></a>杀进程</h6><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo kill PID号</span><br></pre></td></tr></table></figure>
-<h6 id="关机"><a href="#关机" class="headerlink" title="关机"></a>关机</h6><p>1.立即关机<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo shutdown 0</span><br></pre></td></tr></table></figure></p>
-<p>2.定时关机（10分钟后）<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo shutdown +10</span><br></pre></td></tr></table></figure></p>
-<h6 id="重启"><a href="#重启" class="headerlink" title="重启"></a>重启</h6><p>1.立即重启<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo shutdown -r now</span><br></pre></td></tr></table></figure></p>
-<p>2.定时重启（10分钟后）<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo shutdown -r +3</span><br></pre></td></tr></table></figure></p>
-<p>3.定时重启（在20:29重启）[任务放到后台，用户可以继续操作终端]<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo shutdown -r 20:29 [&amp;]</span><br></pre></td></tr></table></figure></p>
-<h5 id="APT高级软件包管理工具"><a href="#APT高级软件包管理工具" class="headerlink" title="APT高级软件包管理工具"></a>APT高级软件包管理工具</h5><h6 id="更新所有软件包"><a href="#更新所有软件包" class="headerlink" title="更新所有软件包"></a>更新所有软件包</h6><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo apt-get update</span><br></pre></td></tr></table></figure>
-<h6 id="apt-get-常用命令"><a href="#apt-get-常用命令" class="headerlink" title="apt-get 常用命令"></a>apt-get 常用命令</h6><table>
-<thead>
-<tr>
-<th>命令</th>
-<th>描述</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>apt-get install node</td>
-<td>下载并安装node</td>
-</tr>
-<tr>
-<td>apt-get upgrade</td>
-<td>下载并安装本系统上已有的软件包的罪行版本</td>
-</tr>
-<tr>
-<td>apt-get remove node</td>
-<td>卸载特定的软件包（node）</td>
-</tr>
-<tr>
-<td>apt-get source</td>
-<td>下载特定软件包的源代码</td>
-</tr>
-<tr>
-<td>apt-get clean</td>
-<td>删除所有的已下载的包文件</td>
-</tr>
-</tbody>
-</table>
-
+        
+          <a class="article-more-a" href="/2018/09/16/Ubuntu终端常用命令/#more">more >></a>
+        
       
 
       
